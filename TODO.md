@@ -63,6 +63,7 @@
   - [x] add a compressed wave-2 `MonsterState` / `Monster.Step` template set
   - [x] run the wave-2 template set through the Phase 2 verifier path and capture the artifact
   - [x] decide to enlarge the encoded state model before widening beyond the compressed Monster seam
+  - [x] note the upstream PR `#1` witness/perf surface as merged and treat it as auxiliary bridge material only
   - [x] add a prototype wave-3 enlarged state carrier in `scripts/agdas_wave3_state.py`
   - [x] thread the wave-3 carrier into executable bridge experiments
   - [x] add a wave-3 Monster-facing template set in `scripts/agdas_bridge.py`
@@ -175,6 +176,18 @@
   - auto-enriches from matching invariant artifacts when available
 - [x] Extend the waveform renderer to compare multiple saved phase-2 artifacts on
   one normalized stacked surface (single HTML + PNG comparison output).
+- [x] Extend the same renderer with a graph-facing `branch-density` mode for the
+  canonical rank-4 dataset, keeping the current waveform HTML/PNG behavior
+  unchanged unless the new mode is explicitly requested.
+- [x] Add explicit `branch-density` x-axis projections so the renderer can show
+  the same rank-4 surface as projected raw states, canonical basins, or
+  experimental Gödel/fraction buckets without changing the existing waveform
+  defaults.
+- [x] Keep both visualization entrypoints:
+  - `scripts/render_trace_waveform.py --mode branch-density` stays the
+    canonical rank-4 basin/topology surface
+  - `scripts/render_trace_graph.py` stays the simpler explicit
+    deterministic-walk graph utility
 - [x] Enrich saved `deterministic_walk` payloads with explicit per-step trace
   fields (`delta`, changed-register mask/list, L1 step delta, action-rank
   before/after, and precomputed state rows/register labels) so downstream
@@ -184,8 +197,193 @@
   - `scripts/render_zkperf_waveform.py`
   - decodes `sample_*.cbor` rows from `zkperf-schema extract`
   - emits normalized JSON plus HTML + PNG waveform artifacts
+- [x] Add a first compact zkperf trace codec on top of the normalized waveform
+  JSON:
+  - target the existing small `*.trace-waveform.json` artifact first
+  - store only the raw sample fields needed to reconstruct the normalized
+    waveform contract
+  - require round-trip reconstruction of `matrix`, `metadata`, and
+    `step_annotations` before treating the codec as useful
+  - implemented in `scripts/compact_zkperf_trace.py`
+  - regression-covered by `scripts/test_compact_zkperf_trace.py`
+  - first measured artifact:
+    `benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact{,.stats}.json`
+    with exact round-trip reconstruction through
+    `benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-roundtrip.json`
+- [x] Add a second-layer motif codec on top of the current compact zkperf
+  rows:
+  - treat the current compact form as the canonical persistent base layer
+  - search for repeated row motifs before introducing any new byte-level coder
+  - start with repeated `(event_idx, pid, tid, cpu_mode)` structure plus
+    timestamp/period parameters
+  - require exact round-trip back to the current compact rows before treating
+    motif compression as valid
+  - record the gain separately from the current projection/reconstruction gain
+  - implemented in `scripts/compact_zkperf_trace.py` via `encode-motif`,
+    `decode-motif`, and `stats-motif`
+  - regression-covered by `scripts/test_compact_zkperf_trace.py`
+  - first measured artifact:
+    `benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif{,.stats}.json`
+    with exact round-trip reconstruction through
+    `benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif-roundtrip.json`
+  - current measured gain on the tiny DA51 sample is modest:
+    `1695 -> 1539` bytes (`~9.2%` smaller than the compact base layer)
+- [ ] Test the current projection + motif stack on richer trace families before
+  designing a third compression layer:
+  - run the same codec over larger or more varied zkperf/perf-derived traces
+  - measure whether motif count and additional gain scale with real repetition
+  - if gains stay small, redesign the motif grammar before adding more layers
+- [x] Add a Dashi-facing semantic labeling pass before motif extraction:
+  - extend the compact row schema with `dashi_class` and `dashi_family`
+  - start with a stub classifier only; do not overclaim theorem-backed Dashi
+    semantics yet
+  - compare:
+    - raw -> compact
+    - raw -> compact -> surface motif
+    - raw -> compact -> semantic motif
+  - require exact round-trip back to the semantic compact rows before treating
+    the semantic motif layer as valid
+  - use the result to decide whether the current weak motif gain is a trace-size
+    problem or a surface-grammar problem
+  - implemented in `scripts/compact_zkperf_trace.py`
+  - regression-covered by `scripts/test_compact_zkperf_trace.py`
+  - first measured comparison artifact:
+    `benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compare.stats.json`
+  - current result on the tiny DA51 sample:
+    - compact with semantic labels: `2139` bytes
+    - surface motif: `1687` bytes with `2` motifs
+    - semantic motif: `1658` bytes with `1` motif
+    - semantic motif beats surface motif, but only slightly (`29` bytes)
+- [ ] Tighten the heuristic semantic labels against the actual `dashi_agda`
+  witness lane before making strong Dashi-native claims:
+  - source or check the current `dashi_class` / `dashi_family` labels against
+    `PerfHistory.agda` / `perf_da51.py`
+  - keep the current classifier explicitly heuristic until that cross-check
+    exists
+- [x] Normalize and compare the real upstream `dashi_agda` witness summary:
+  - target `../dashi_agda/da51_shards/summary.json`
+  - derive `dashi_class` / `dashi_family` from actual Agda module names rather
+    than only from the tiny zkperf sample transition labels
+  - compare the same three stages:
+    - raw -> compact
+    - raw -> compact -> surface motif
+    - raw -> compact -> semantic motif
+  - use this result to decide whether semantic compression scales on a genuinely
+    Dashi-linked dataset before widening to broader perf families
+  - implemented in `scripts/compact_dashi_perfhistory.py`
+  - regression-covered by `scripts/test_compact_dashi_perfhistory.py`
+  - first measured comparison artifact:
+    `benchmarks/results/2026-03-27-dashi-perfhistory-compare.stats.json`
+  - current result on `../dashi_agda/da51_shards/summary.json`:
+    - raw summary: `9758` bytes
+    - normalized analysis form: `23722` bytes over `41` rows
+    - compact normalized form: `14245` bytes
+    - surface motif: `16586` bytes with `14` motifs
+    - semantic motif: `14156` bytes with `22` motifs
+  - conclusion:
+    the summary path is useful for semantic labeling and semantic-vs-surface
+    comparison, but it is not yet a raw storage win over the upstream summary
+    artifact itself
+- [x] Find the next richer Dashi-linked artifact that can plausibly beat the raw
+  source on storage, not just the normalized analysis form:
+  - likely candidates are richer DA51 shard/trace surfaces rather than the
+    already-compact `summary.json`
+  - use the current `summary.json` run as the semantic calibration pass, not as
+    the final compression target
+  - resolved target:
+    the aggregate `../dashi_agda/da51_shards/*.cbor` corpus
+- [x] Compact the aggregate DA51 CBOR shard set with exact shard-byte
+  reconstruction:
+  - target `../dashi_agda/da51_shards/*.cbor` as a single aggregate corpus
+  - compare against the actual raw shard bytes, not only against JSON
+    normalizations
+  - factor repeated FRACTRAN program skeletons (`ssp_primes`,
+    `denominators`, `fractions`, `steps`, `earns_moonshine`) plus semantic
+    module families across shards
+  - require exact decode back to the original per-file CBOR shard bytes before
+    treating the aggregate codec as valid
+  - use the result to decide whether the next Dashi-native win comes from
+    aggregate CBOR factorization or from deeper trace payloads beneath the
+    current shard level
+  - implemented in `scripts/compact_dashi_da51_shards.py`
+  - regression-covered by `scripts/test_compact_dashi_da51_shards.py`
+  - first measured comparison artifact:
+    `benchmarks/results/2026-03-27-dashi-da51-shards-compare.stats.json`
+  - current result on `../dashi_agda/da51_shards/*.cbor`:
+    - raw shard set: `15658` bytes across `41` files
+    - compact surface aggregate: `9275` bytes with `33` program motifs
+    - semantic aggregate: `9971` bytes with `33` program motifs and `22`
+      semantic motifs
+  - conclusion:
+    aggregate CBOR factorization is the first Dashi-linked storage win that
+    beats the raw upstream artifact itself while still decoding exactly back to
+    the original shard bytes
+- [ ] Decide whether to stop at the aggregate DA51 shard boundary or drill into
+  deeper trace payloads:
+  - if the current aggregate shard package is the intended publish/export unit,
+    the next work should be packaging and upstreaming rather than another codec
+  - if the real target is still per-trace structure under the current shard
+    payload, inspect deeper trace surfaces rather than building more JSON-side
+    analysis layers
+- [x] Freeze the below-shard DA51 contract against the shipped shards and
+  `PerfHistory.agda`, not `perf_da51.py` alone:
+  - document the current positive and negative FRACTRAN payload shapes
+  - record that `trace_sha256` currently hashes `counters`, not the FRACTRAN
+    trace
+  - record which fields are derivable in the current shipped corpus
+  - treat `perf_da51.py` as stale or incomplete for this lane until it matches
+    the emitted shard surface
+  - implemented in `DA51_BELOW_SHARD_CONTRACT.md`
+  - added a file-by-file boundary map (40 positive + 1 negative) and explicit
+    source-side mapping for `perf_da51.py` vs `PerfHistory.agda`
+- [ ] Build the first below-shard codec/model over the real inner FRACTRAN
+- [x] Build the first below-shard codec/model over the real inner FRACTRAN
+  payload:
+  - factor counters, program skeleton, trace, and exception case against the
+    frozen below-shard contract
+  - use the current corpus invariants only where they are explicitly documented
+    in `DA51_BELOW_SHARD_CONTRACT.md`
+  - require exact decode back to the original shard bytes for the current
+    checked-in corpus
+  - compare its size against the current aggregate-shard codec before treating
+    it as the new preferred boundary
+  - implemented in `scripts/compact_dashi_da51_inner.py`
+  - regression-covered by `scripts/test_compact_dashi_da51_inner.py`
+  - first measured comparison artifact:
+    `benchmarks/results/2026-03-27-dashi-da51-inner-compare.stats.json`
+  - current result on the current shipped shard corpus:
+    - raw shard set: `15658` bytes
+    - aggregate shard surface codec: `9275` bytes
+    - inner-payload codec: `5387` bytes
+  - conclusion:
+    for the current corpus, below-shard factorization beats the aggregate shard
+    codec materially while still decoding exactly back to the original shard
+    bytes
+- [ ] Decide whether to upstream the below-shard codec shape or keep it local
+  until the generator side is reconciled:
+  - current blocker: `perf_da51.py` does not describe the full shipped shard
+    contract, so upstreaming a corpus-specific inner codec without clarifying
+    generator ownership could create confusion
+  - temporary reconciliation now exists via `--fractran-template` on
+    `../dashi_agda/perf_da51.py`:
+    - when enabled, generated shards copy matching `fractran` payloads from a
+      source shard directory.
+    - when disabled, legacy schema-only emission is preserved.
+  - if upstreamed, present it as operating on the **current emitted corpus**
+    while defaulting off to avoid changing existing generator semantics.
+    - when upstreaming, document the exact provenance requirement for full-schema
+      generation and the open expectation for a default future mode.
+- [ ] Validate and harden the `perf_da51.py` template mode before enabling it by
+  default:
+  - include a dry-run contract check for full-schema parity
+  - decide whether to ship `--fractran-template` as optional only or switch it to
+    the canonical mode once the upstream contract is agreed
 - [ ] Decide whether the `113` total degeneracy has structural support or should be discarded as coincidence.
 - [ ] Write and maintain the short result note distinguishing observations from conjectures for the active `physics22` exploratory baseline.
+- [ ] Finish the `fractran` submodule repair after the maintained fork exists:
+  - push preserved local branch `frackdash-bench` (commit `6ccc7cc`) to the fork
+  - switch `.gitmodules` from `pimlu/fractran` to that fork URL
+  - update the tracked `fractran` gitlink to the pushed benchmark commit
 - [ ] Intake `monster/MonsterLean` references into FRACDASH with proof-completeness filtering:
   - [x] generate a machine-readable inventory for candidate modules (`MonsterWalk*`, `ComplexityLattice`) with `sorry`/`axiom` flags
   - [x] extract only reusable definitions/constants into FRACDASH-side notes

@@ -62,6 +62,139 @@ These were fetched into the canonical archive for traceability but should not dr
 
 FRACDASH is a fresh repo whose immediate purpose is to reimplement DASHI-style dynamics in FRACTRAN and evaluate the mathematical behavior experimentally.
 
+The first bounded perf-compression slice is now real on `2026-03-27`:
+`scripts/compact_zkperf_trace.py` compresses the checked-in normalized zkperf
+waveform JSON by storing only the raw sample facts needed to reconstruct the
+derived trace contract. The first DA51 sample artifact shrank from `5875` bytes
+to `1695` bytes with exact round-trip reconstruction, so the current codec
+target is no longer hypothetical. This remains a narrow zkperf-side witness
+codec, not yet the general perf-output or Zelph shard packaging solution.
+
+Follow-up clarification from the main thread on `2026-03-27`:
+- source: current working turn
+- online UUID: not provided in-turn
+- main decision:
+  - the current codec should be understood as
+    `projection(model) + residual = exact reconstruction`
+  - the win comes from dropping duplicated derived structure (`matrix`,
+    expanded annotations) and keeping only the canonical generating fields
+  - this is the first concrete MDL-style witness in FRACDASH, not merely a
+    generic compressor
+  - the next compression increment should be motif compression on top of the
+    current compact rows, not a replacement of the projection layer
+- first motif target:
+  - repeated `(event_idx, pid, tid, cpu_mode)` structure with timestamp/period
+    parameters
+- followthrough:
+  - the first motif layer is now implemented in
+    `scripts/compact_zkperf_trace.py`
+  - it lifts repeated `(event_idx, pid, tid, cpu_mode)` tuples into a motif
+    table and keeps row-local `step`, `timestamp`, `period`, and `cid`
+    parameters
+  - on the checked-in DA51 sample it finds `2` motifs and shrinks the compact
+    artifact from `1695` bytes to `1539` bytes with exact round-trip back to
+    the compact rows
+  - current read: the motif layer is valid, but the measured gain on this tiny
+    sample is modest, so richer traces are now the more important next test
+- next Dashi-facing test:
+  add `dashi_class` / `dashi_family` labels to the compact rows and rerun
+  motif extraction over semantic labels rather than only surface tuples
+- followthrough:
+  - the compact rows now carry heuristic `dashi_class` / `dashi_family` labels
+  - `scripts/compact_zkperf_trace.py` now supports side-by-side comparison of:
+    - raw -> compact
+    - raw -> compact -> surface motif
+    - raw -> compact -> semantic motif
+  - on the checked-in DA51 sample:
+    - compact with semantic labels: `2139` bytes
+    - surface motif: `1687` bytes with `2` motifs
+    - semantic motif: `1658` bytes with `1` motif
+  - current read:
+    semantic labeling helps, but only slightly on this tiny trace; projection
+    remains the dominant gain source and richer traces are still needed before
+    claiming strong Dashi-native compression
+  - next concrete target:
+    `../dashi_agda/da51_shards/summary.json`, because it is directly emitted by
+    `perf_da51.py` and carries real Agda module names suitable for better
+    `dashi_class` / `dashi_family` labeling than the tiny zkperf sample
+  - followthrough:
+    `scripts/compact_dashi_perfhistory.py` now normalizes that summary and
+    compares compact, surface-motif, and semantic-motif layers over the
+    Dashi-linked rows
+  - current result on the upstream summary:
+    - raw summary: `9758` bytes
+    - normalized analysis form: `23722` bytes
+    - compact normalized form: `14245` bytes
+    - surface motif: `16586` bytes
+    - semantic motif: `14156` bytes
+  - current read:
+    the summary path is a useful Dashi-linked semantic calibration target, but
+    not yet the correct compression target if the goal is to beat the raw
+    upstream artifact on storage
+  - next concrete target:
+    the aggregate CBOR shard set under `../dashi_agda/da51_shards/*.cbor`
+  - reason:
+    the shard set still carries repeated CBOR keys, repeated FRACTRAN program
+    skeletons, and real module-family semantics that `summary.json` already
+    collapsed away
+  - measured regularity before implementation:
+    - `41` shard files totaling `15658` bytes
+    - `24` shards share the exact FRACTRAN fractions
+      `('47/2', '59/3', '71/5')`
+    - `40` shards share `steps = 3`, `trace` length `4`, and
+      `earns_moonshine = True`
+    - `MonsterVectors.cbor` is the only current negative case, with no full
+      FRACTRAN trace and `earns_moonshine = False`
+  - constraint:
+    the next codec should compare aggregate shard bytes against a compact
+    aggregate representation with exact shard-byte reconstruction, not against
+    another analysis-only JSON expansion
+  - followthrough:
+    `scripts/compact_dashi_da51_shards.py` now compacts the entire
+    `../dashi_agda/da51_shards/*.cbor` corpus into a single aggregate CBOR
+    payload and decodes exactly back to the original per-file shard bytes
+  - first aggregate result:
+    - raw shard set: `15658` bytes across `41` files
+    - compact surface aggregate: `9275` bytes with `33` repeated program motifs
+    - semantic aggregate: `9971` bytes with `22` semantic motifs
+  - current read:
+    aggregate CBOR factorization is the first Dashi-linked storage win that
+    beats the raw upstream artifact itself; the remaining open decision is
+    whether the next gain should come from deeper trace payloads beneath the
+    current shard level or whether this aggregate boundary is already the right
+    publish/export unit
+  - governance update for the next step:
+    below-shard work should treat the checked-in shard corpus plus
+    `../dashi_agda/PerfHistory.agda` as canonical, not `../dashi_agda/perf_da51.py`
+    alone
+  - reason:
+    `perf_da51.py` currently explains `file`, `sha256`, `counters`, and
+    `trace_sha256`, but the shipped shards and `PerfHistory.agda` also contain
+    a `fractran` payload, so the generator source is stale or incomplete
+    relative to the emitted artifact surface for this lane
+  - frozen below-shard contract:
+    see `DA51_BELOW_SHARD_CONTRACT.md`
+  - followthrough:
+    `scripts/compact_dashi_da51_inner.py` now compacts the inner FRACTRAN
+    payload against that frozen contract and decodes exactly back to the
+    original shard bytes
+  - first below-shard result:
+    - raw shard set: `15658` bytes
+    - aggregate shard surface codec: `9275` bytes
+    - below-shard inner codec: `5387` bytes
+  - current read:
+    for the current shipped corpus, the meaningful next gain is indeed below
+    the shard boundary because `fractions`, `trace`, and `trace_sha256` are
+    redundant given the frozen contract; the remaining open question is
+    governance, not feasibility
+
+Upstream `../dashi_agda` now has PR `#1` merged on `2026-03-27`, which adds a
+small witness/perf surface on top of the existing closure spine:
+`Kernel/KAlgebra.agda`, `Monster/MUltrametric.agda`, `Moonshine.agda`,
+`MoonshineEarn.agda`, `JFixedPoint.agda`, `PerfHistory.agda`, and
+`perf_da51.py`. FRACDASH should treat those as auxiliary witness artifacts, not
+as a replacement for the canonical closure/audit intake.
+
 The conversation sharpened these decisions:
 
 1. The repo should aim for an executable bridge from DASHI to FRACTRAN, not a rhetorical comparison.
@@ -91,6 +224,7 @@ The conversation sharpened these decisions:
 - Decision lock on `2026-03-23`: `physics23` should remain a successor candidate rather than replace `physics22` as the active 6-register baseline, because it only improves the recurrent-core side of the `physics21 -> physics22` gain shape. In parallel, `carrier8_physics2` is now explicitly the active 8-register experiment track, and the next branch target is an earlier boundary-return re-entry hook rather than another late-added memory rule. See `CARRIER8_PHYSICS4_TARGET_NOTE.md`.
 - Carrier8 follow-up on `2026-03-23`: the first `carrier8_physics4` trial moved the boundary-return re-entry hook earlier, ahead of the broad return-memory damping rules, and still left the shared cross-carrier summary flat (`6561` deterministic edges, `0` terminals, `10` longest chain, `boundary_to_interior = 0`, same best candidate and geometry surrogates). Current read: the 8-register blocker is deeper than rule placement alone, so `carrier8_physics2` remains the active parallel baseline and `carrier8_physics4` should be treated as a useful negative result.
 - Source-aligned cone enforcement status on `2026-03-24`: Δ-cone machinery is stable; physics6 remains the 8-register baseline. Multiple cones tested (generic drop, simple source basis, ERDFA-ish basis, hand-crafted contrasts) all rejected 0 edges. Aggressive sign-flip cones reject many edges but destroy boundary/curvature metrics. Next action requires a real attractor/eigen basis from source data; placeholder bases are exhausted.
+- Visualization split on `2026-03-25`: FRACDASH now has two distinct local trace surfaces. The existing deterministic-walk waveform remains the time/register view, while `scripts/render_trace_waveform.py --mode branch-density` adds a graph-facing spectrogram for the canonical rank-4 surface. That branch-density lane is now explicitly projection-indexed: `raw-state` is the detailed/debug view, `basin` is the preferred canonical explanation surface for the 10-basin / chain-height-4 story, and `bucket` is an exploratory Gödel/fraction-band view for the "jumping between fractions" question. Current implementation scope remains deliberately 6-register/rank-4 only. Repo-status boundary recorded at the same time: branch-density work is confined to the renderer/docs plus `rank4-dataset-latest.branch-density-view.branch-density.{html,png}`; unrelated `.gitmodules`, dirty `fractran`, and untracked `scripts/render_trace_graph.py` state was not part of that change.
 - Carrier8 curvature-recovery follow-up on `2026-03-23`: `carrier8_physics6` keeps `boundary_to_interior = 6`, restores curvature to `~0.9728`, geodesic-like near-min dips slightly to `~0.9894`, and best-candidate strict decrease returns to `~0.515`. Current read: promote `carrier8_physics6` as the provisional 8-register baseline and aim the next refinement at recovering the small geodesic/strict-decrease loss without giving back boundary recovery or curvature.
 - Solver-track decision on `2026-03-20`: the repo now explicitly runs a dual track. Python remains the equation-probe/benchmark layer; FRACTRAN remains the deterministic/auditable bridge-execution layer. The first named-equation stress test lives in `scripts/named_equation_probe.py` with saved artifacts at `benchmarks/results/2026-03-20-equation-probe-{wave,heat}.json`. Result: `wave` is structurally mismatched and falls back to `heat`; one extra `heat` shot using a quantized explicit diffusion step improves the fit to `qualitative_only` (`normalized_l2_error ~ 0.456`, `correlation ~ 0.917`) but still does not justify a same-accuracy speed claim. The near-term project win should therefore be treated as proof-carrying / auditable execution first, with `heat` retained only as the least-bad named-equation comparison family if the solver lane is revisited.
 - Upstream-wave boundary check on `2026-03-20`: after re-reading `../dashi_agda`, FRACDASH should stop treating the wave/heat split as a mere heuristic. Upstream Agda contains a real wave/unitary semantic lane (`DASHI.Unifier.WaveLift`, `DASHI.Quantum.Stone`, `DASHI.Physics.WaveLiftEvenSubalgebra`, and the broader `DASHI.Physics.Closure.*Wave*` surface), while the local FRACDASH executable subset remains empirically dissipative and contraction-heavy. The actionable split is therefore: keep `wave` alive as a formal bridge target and use `heat` only as the least-bad current runtime comparison family. The reproducible local artifact for that read is `benchmarks/results/2026-03-20-dashi-agda-wave-surface.{json,md}` from `scripts/check_dashi_agda_wave_surface.py`.

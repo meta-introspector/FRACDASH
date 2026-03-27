@@ -1,11 +1,169 @@
 # Changelog
 
+## 2026-03-27
+
+- Added [`scripts/compact_zkperf_trace.py`](/home/c/Documents/code/FRACDASH/scripts/compact_zkperf_trace.py)
+  as the first schema-aware compact codec for the normalized zkperf waveform
+  JSON contract. It keeps only the raw sample fields needed to reconstruct the
+  waveform (`step`, event id, timestamp, period, pid, tid, cpu mode, cid) plus
+  the current heuristic semantic labels (`dashi_class`, `dashi_family`) and
+  rebuilds the derived matrix/annotation surface on decode.
+- Added the direct regression check
+  [`scripts/test_compact_zkperf_trace.py`](/home/c/Documents/code/FRACDASH/scripts/test_compact_zkperf_trace.py),
+  which asserts exact round-trip equality against the checked-in DA51 sample
+  waveform artifact.
+- Captured the first compact zkperf artifacts:
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.json),
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.stats.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.stats.json),
+  and
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-roundtrip.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-roundtrip.json).
+  Result: the checked-in sample now shrinks from `5875` bytes to `2139` bytes
+  (`~63.6%` smaller) with exact normalized-trace reconstruction and heuristic
+  semantic labels preserved in the compact rows.
+- Clarified the interpretation of that codec in the repo docs/context:
+  it is now explicitly treated as a projection/reconstruction witness that
+  removes duplicated derived structure, making it the first concrete
+  MDL-style compression surface in FRACDASH rather than a generic byte-level
+  coder.
+- Extended [`scripts/compact_zkperf_trace.py`](/home/c/Documents/code/FRACDASH/scripts/compact_zkperf_trace.py)
+  with a second-layer motif codec over the compact rows. The current motif
+  grammar lifts repeated `(event_idx, pid, tid, cpu_mode)` tuples into a motif
+  table while keeping `step`, `timestamp`, `period`, and `cid` as row-local
+  parameters. The exact compact-row round-trip now also preserves the heuristic
+  `dashi_class` / `dashi_family` labels.
+- Extended the regression check
+  [`scripts/test_compact_zkperf_trace.py`](/home/c/Documents/code/FRACDASH/scripts/test_compact_zkperf_trace.py)
+  so the motif layer must round-trip exactly back to the compact rows and still
+  be smaller than the compact source payload.
+- Captured the first motif-layer artifacts:
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif.json),
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif.stats.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif.stats.json),
+  and
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif-roundtrip.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif-roundtrip.json).
+  Result: on the tiny checked-in DA51 sample, the surface motif layer finds `2`
+  motifs and reduces the compact payload from `2139` bytes to `1687` bytes
+  (`~21.1%` smaller than the compact base layer) with exact round-trip.
+- Extended the same codec with a semantic-motif layer that groups rows by
+  `(event_idx, pid, tid, dashi_class, dashi_family)` and keeps `cpu_mode` as a
+  row-local parameter. Captured:
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-semantic-motif.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-semantic-motif.json),
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-semantic-motif-roundtrip.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-semantic-motif-roundtrip.json),
+  and the side-by-side summary
+  [`benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compare.stats.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compare.stats.json).
+  Result: the semantic motif layer collapses the sample to `1` motif and
+  reaches `1658` bytes, beating the current surface motif grammar by `29`
+  bytes but not yet changing the overall conclusion that projection remains the
+  dominant gain source on this tiny trace.
+- Recorded the next tighter Dashi-facing target in the docs/context/TODO:
+  normalize and compress `../dashi_agda/da51_shards/summary.json`, which is
+  directly emitted by `perf_da51.py` and carries real Agda module names for
+  semantic labeling.
+- Added [`scripts/compact_dashi_perfhistory.py`](/home/c/Documents/code/FRACDASH/scripts/compact_dashi_perfhistory.py)
+  plus regression coverage in
+  [`scripts/test_compact_dashi_perfhistory.py`](/home/c/Documents/code/FRACDASH/scripts/test_compact_dashi_perfhistory.py)
+  as the first Dashi-linked summary normalizer/codec. It derives
+  `dashi_class` / `dashi_family` from real Agda module names in
+  `../dashi_agda/da51_shards/summary.json` and compares compact, surface-motif,
+  and semantic-motif layers over that normalized summary.
+- Captured the first Dashi-summary artifacts:
+  [`benchmarks/results/2026-03-27-dashi-perfhistory-normalized.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-perfhistory-normalized.json),
+  [`benchmarks/results/2026-03-27-dashi-perfhistory-compact.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-perfhistory-compact.json),
+  [`benchmarks/results/2026-03-27-dashi-perfhistory-surface-motif.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-perfhistory-surface-motif.json),
+  [`benchmarks/results/2026-03-27-dashi-perfhistory-semantic-motif.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-perfhistory-semantic-motif.json),
+  and
+  [`benchmarks/results/2026-03-27-dashi-perfhistory-compare.stats.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-perfhistory-compare.stats.json).
+  Result: semantic motif clearly beats surface motif on the normalized summary
+  (`14156` vs `16586` bytes), but the raw upstream `summary.json` (`9758`
+  bytes) is already smaller than the normalized/compact forms, so this run is
+  a semantic calibration success rather than a storage-compression success.
+- Added [`scripts/compact_dashi_da51_shards.py`](/home/c/Documents/code/FRACDASH/scripts/compact_dashi_da51_shards.py)
+  plus regression coverage in
+  [`scripts/test_compact_dashi_da51_shards.py`](/home/c/Documents/code/FRACDASH/scripts/test_compact_dashi_da51_shards.py)
+  as the first aggregate DA51 CBOR shard codec. It factors repeated FRACTRAN
+  program skeletons across the full `../dashi_agda/da51_shards/*.cbor` corpus
+  and decodes exactly back to the original per-file shard bytes.
+- Captured the first aggregate DA51 shard artifacts:
+  [`benchmarks/results/2026-03-27-dashi-da51-shards-surface.cbor`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-da51-shards-surface.cbor),
+  [`benchmarks/results/2026-03-27-dashi-da51-shards-semantic.cbor`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-da51-shards-semantic.cbor),
+  and
+  [`benchmarks/results/2026-03-27-dashi-da51-shards-compare.stats.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-da51-shards-compare.stats.json).
+  Result: the raw shard set (`15658` bytes across `41` files) compresses to
+  `9275` bytes in the compact surface aggregate (`33` repeated program motifs)
+  and to `9971` bytes in the semantic aggregate (`33` program motifs, `22`
+  semantic motifs), both with exact shard-byte reconstruction.
+- Recorded the new boundary decision in the docs/TODO/context: the Dashi-linked
+  storage win now exists at the aggregate DA51 CBOR shard level, so the next
+  question is whether to package that boundary or to drill below it into deeper
+  trace payloads rather than building more analysis-only JSON layers.
+- Added [`DA51_BELOW_SHARD_CONTRACT.md`](/home/c/Documents/code/FRACDASH/DA51_BELOW_SHARD_CONTRACT.md)
+  to freeze the current shipped DA51 inner-payload contract against the actual
+  shard corpus plus [`../dashi_agda/PerfHistory.agda`](/home/c/Documents/code/dashi_agda/PerfHistory.agda),
+  not [`../dashi_agda/perf_da51.py`](/home/c/Documents/code/dashi_agda/perf_da51.py)
+  alone. The note records the current positive/negative FRACTRAN shapes,
+  documents that `trace_sha256` currently hashes `counters`, and marks
+  `fractions`, `trace`, and `trace_sha256` as derivable for the current corpus.
+- Added a source-file boundary appendix in
+  [`DA51_BELOW_SHARD_CONTRACT.md`](/home/c/Documents/code/FRACDASH/DA51_BELOW_SHARD_CONTRACT.md)
+  to remove ambiguity between `perf_da51.py` and `PerfHistory.agda`:
+  which inputs FRACDASH should treat as canonical for below-shard modeling,
+  and the exact file-level shape split (`40` positive + `1` negative) in
+  `../dashi_agda/da51_shards`.
+- Added [`scripts/compact_dashi_da51_inner.py`](/home/c/Documents/code/FRACDASH/scripts/compact_dashi_da51_inner.py)
+  plus regression coverage in
+  [`scripts/test_compact_dashi_da51_inner.py`](/home/c/Documents/code/FRACDASH/scripts/test_compact_dashi_da51_inner.py)
+  as the first below-shard DA51 codec. It stores only counters, positive
+  program skeletons, positive `state`, and the negative exception case, then
+  reconstructs `fractions`, `trace`, and `trace_sha256` on decode.
+- Captured the first below-shard artifacts:
+  [`benchmarks/results/2026-03-27-dashi-da51-inner.cbor`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-da51-inner.cbor)
+  and
+  [`benchmarks/results/2026-03-27-dashi-da51-inner-compare.stats.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-27-dashi-da51-inner-compare.stats.json).
+- Documented and validated a compatibility pathway for shard regeneration in
+  `../dashi_agda/perf_da51.py`: `--fractran-template` can copy full
+  `fractran` payloads from existing shards without changing the default legacy
+  schema-only emission. This enables deterministic rebuilds against the frozen
+  shipped corpus while we keep generator-vs-canonical contract decisions
+  explicit.
+  Result: the current shipped shard corpus shrinks from `15658` bytes to
+  `5387` bytes with exact shard-byte reconstruction, beating the current
+  aggregate shard surface codec (`9275` bytes) by `3888` bytes.
+- Updated the downstream FRACDASH bridge docs to reflect that upstream
+  `../dashi_agda` already merged PR `#1` on `2026-03-27`, adding the auxiliary
+  witness/perf surface (`Kernel/KAlgebra.agda`, `Monster/MUltrametric.agda`,
+  `Moonshine.agda`, `MoonshineEarn.agda`, `JFixedPoint.agda`,
+  `PerfHistory.agda`, and `perf_da51.py`).
+- Clarified that FRACDASH should treat that upstream addition as witness and
+  provenance material, not as a change to the local executable bridge
+  obligations or the canonical closure intake.
+
 ## 2026-03-25
 
+- Added [`scripts/render_trace_graph.py`](/home/c/Documents/code/FRACDASH/scripts/render_trace_graph.py)
+  as a directed deterministic-walk graph renderer for phase-2 artifacts. It
+  consumes the saved `deterministic_walk.path`, renders visited states as
+  nodes, uses transition-family labels on edges, and scales edge width by
+  repeated edge use inside the saved walk.
+- Updated [`README.md`](/home/c/Documents/code/FRACDASH/README.md) with the new
+  trace-graph entrypoint and an explicit scope note: this view shows the saved
+  deterministic walk honestly and does not claim to reconstruct the full basin
+  graph unless that graph is present in the source artifact.
 - Added [`scripts/render_trace_waveform.py`](/home/c/Documents/code/FRACDASH/scripts/render_trace_waveform.py) as the first deterministic-walk waveform renderer for phase-2 FRACDASH artifacts. It consumes `deterministic_walk.path`, reconstructs the full state rows, overlays cycle-start and transition summaries, and emits both a standalone HTML view and a PNG artifact.
 - The renderer auto-resolves a matching invariant artifact when one exists, so the waveform can annotate the walk with `best_candidate` and regime/execution-status context without introducing a second trace schema.
 - Verified the renderer on [`benchmarks/results/2026-03-23-agdas-physics23-phase2.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-23-agdas-physics23-phase2.json) and [`benchmarks/results/2026-03-23-agdas-carrier8-physics6-phase2.json`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-23-agdas-carrier8-physics6-phase2.json), generating companion `.trace-waveform.html` and `.trace-waveform.png` artifacts for each.
 - Extended the waveform renderer to support stacked multi-artifact comparison output from the same normalized trace contract, so `physics*` and `carrier8_*` runs can be compared in one HTML + PNG artifact rather than by opening multiple single-run files.
+- Extended [`scripts/render_trace_waveform.py`](/home/c/Documents/code/FRACDASH/scripts/render_trace_waveform.py) with a separate `branch-density` mode for the canonical rank-4 dataset. It leaves the current walk waveform untouched unless requested, and adds a graph-facing spectrogram view with structural sector/stability rows plus an optional walk-time panel on the same projected raw-state axis.
+- Extended the same `branch-density` mode with explicit x-axis projections: `raw-state` for the detailed projected lattice, `basin` for the canonical 10-sector explanation surface with reachability annotations, and `bucket` for an experimental Gödel/fraction-band view intended to make "jumping between fractions" legible without conflating it with the basin claim.
+- Repo-status boundary for the branch-density work on `2026-03-25`: the intended local changes are currently limited to [`scripts/render_trace_waveform.py`](/home/c/Documents/code/FRACDASH/scripts/render_trace_waveform.py), [`README.md`](/home/c/Documents/code/FRACDASH/README.md), [`TODO.md`](/home/c/Documents/code/FRACDASH/TODO.md), [`CHANGELOG.md`](/home/c/Documents/code/FRACDASH/CHANGELOG.md), and the generated `rank4-dataset-latest.branch-density-view.branch-density.{html,png}` artifacts. Unrelated worktree state (`.gitmodules`, dirty `fractran`, and untracked [`scripts/render_trace_graph.py`](/home/c/Documents/code/FRACDASH/scripts/render_trace_graph.py)) was left untouched.
+- Recorded the visualization split explicitly in the docs: keep
+  `render_trace_waveform.py --mode branch-density` as the canonical
+  basin/topology surface for the current rank-4 discussion, while retaining
+  [`scripts/render_trace_graph.py`](/home/c/Documents/code/FRACDASH/scripts/render_trace_graph.py)
+  as a simpler deterministic-walk graph utility.
+- Recorded the current `fractran` repair boundary in the docs as well:
+  the local benchmark work is preserved on branch `frackdash-bench`
+  at commit `6ccc7cc`, `.gitmodules` declares `fractran` again, and the
+  remaining step is to flip the canonical submodule URL from `pimlu/fractran`
+  to the maintained fork once that fork exists.
 - Enriched phase-2 deterministic-walk payloads in the FRACDASH experiment runners with explicit per-step trace fields (`delta`, changed-register mask/list, L1 step delta, action-rank before/after, state rows, register labels), reducing downstream recomputation and fixing the renderer contract directly in the saved artifacts.
 - Added the first zkperf waveform adapter [`scripts/render_zkperf_waveform.py`](/home/c/Documents/code/FRACDASH/scripts/render_zkperf_waveform.py). It decodes extracted `sample_*.cbor` DA51 shards from `zkperf-schema extract`, maps them into the same internal waveform contract, emits normalized JSON, and renders HTML + PNG artifacts while carrying shard-family counts as metadata.
 

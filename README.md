@@ -34,6 +34,56 @@ What exists now:
 - a stable cross-slice bridge regime summary at [`benchmarks/results/2026-03-19-bridge-regime-summary.md`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-19-bridge-regime-summary.md)
 - an executable witness/status surface for the closed bridge family via [`formalism/ExecutionWitnessSketch.agda`](/home/c/Documents/code/FRACDASH/formalism/ExecutionWitnessSketch.agda) and `execution_status` emission in invariant artifacts
 
+Upstream note:
+
+- `../dashi_agda` merged PR `#1` on `2026-03-27`, adding the auxiliary
+  witness/perf surface (`Kernel/KAlgebra.agda`, `Monster/MUltrametric.agda`,
+  `Moonshine.agda`, `MoonshineEarn.agda`, `JFixedPoint.agda`,
+  `PerfHistory.agda`, and `perf_da51.py`) on top of the canonical closure
+  spine.
+- FRACDASH should continue to treat that upstream addition as witness material
+  for bridging and provenance, not as a change to the local executable subset
+  or bridge correctness obligations.
+
+Current Dashi-facing compression note:
+
+- the tiny zkperf waveform sample established the first projection/reconstruction
+  win, and the `summary.json` pass established that semantic labels help
+  calibrate motifs, but `../dashi_agda/da51_shards/summary.json` is already too
+  compact to be the real storage target
+- the next correct target was the aggregate DA51 CBOR shard set under
+  [`../dashi_agda/da51_shards/`](/home/c/Documents/code/dashi_agda/da51_shards),
+  because that layer still carries repeated CBOR keys, repeated FRACTRAN
+  program skeletons, and real module-family semantics
+- that aggregate CBOR codec now exists in
+  [`scripts/compact_dashi_da51_shards.py`](/home/c/Documents/code/FRACDASH/scripts/compact_dashi_da51_shards.py)
+  with exact shard-byte reconstruction
+- first measured result on the full shard set:
+  - raw shards: `15658` bytes across `41` files
+  - compact surface aggregate: `9275` bytes (`~40.8%` smaller)
+  - semantic aggregate: `9971` bytes (`~36.3%` smaller)
+- current read:
+  aggregate CBOR factorization is the first Dashi-linked storage win that beats
+  the raw upstream artifact itself; the remaining open question is whether the
+  next meaningful gain is below the current shard boundary rather than in
+  another higher-level normalization layer
+- that below-shard question is now answered for the current shipped corpus:
+  [`scripts/compact_dashi_da51_inner.py`](/home/c/Documents/code/FRACDASH/scripts/compact_dashi_da51_inner.py)
+  uses the frozen inner contract in
+  [`DA51_BELOW_SHARD_CONTRACT.md`](/home/c/Documents/code/FRACDASH/DA51_BELOW_SHARD_CONTRACT.md)
+  to derive `fractions`, `trace`, and `trace_sha256` instead of storing them
+  redundantly
+- first measured below-shard result:
+  - raw shards: `15658` bytes
+  - aggregate shard surface codec: `9275` bytes
+  - inner-payload codec: `5387` bytes (`~65.6%` smaller than raw, `3888` bytes
+    smaller than the aggregate shard codec)
+- current read:
+  for the current shipped DA51 corpus, the meaningful next gain is below the
+  shard boundary; the remaining policy question is whether to upstream this as
+  a corpus-specific codec or keep it as FRACDASH-side research until the
+  generator side is reconciled
+
 What does not exist yet:
 
 - the executable 10-basin obstruction experiments
@@ -63,6 +113,7 @@ The near-term questions are:
 - [`MONSTER10WALK_CANONICAL.md`](/home/c/Documents/code/FRACDASH/MONSTER10WALK_CANONICAL.md): frozen canonical semantics and lock criteria for the Monster 10-walk lane
 - [`MONSTERLEAN_INTAKE.md`](/home/c/Documents/code/FRACDASH/MONSTERLEAN_INTAKE.md): intake notes for the local `monster/MonsterLean` clone and proof-completeness caveats
 - [`AGDAS_FORMALISM_INTAKE.md`](/home/c/Documents/code/FRACDASH/AGDAS_FORMALISM_INTAKE.md): authoritative intake note for the upstream `../dashi_agda` physics/closure formalism
+- [`DA51_BELOW_SHARD_CONTRACT.md`](/home/c/Documents/code/FRACDASH/DA51_BELOW_SHARD_CONTRACT.md): frozen contract note for the current shipped `da51_shards/*.cbor` inner payload shape used by below-shard compression/modeling work
 - [`BRIDGE_CORRECTNESS.md`](/home/c/Documents/code/FRACDASH/BRIDGE_CORRECTNESS.md): formal target note for semantics-preserving compilation, quotient validity, decoder correctness, and robustness
 - [`CURRENT_FORMAL_RESULT.md`](/home/c/Documents/code/FRACDASH/CURRENT_FORMAL_RESULT.md): short current formal result statement for the closed bridge family
 - [`JMD_HANDOFF_NOTE.md`](/home/c/Documents/code/FRACDASH/JMD_HANDOFF_NOTE.md): short handoff note separating the closed bridge result from the still-open 10-walk / rank-4 semantics question
@@ -238,6 +289,32 @@ marks the cycle boundary when present, and emits:
 If a matching invariant artifact exists, the renderer auto-loads it to annotate
 the waveform with the current best candidate and regime usage summary.
 
+### Deterministic Walk Graph
+
+Use the trace-graph renderer when you want the saved deterministic walk shown as
+an explicit directed state graph rather than as a register heatmap:
+
+```sh
+python3 scripts/render_trace_graph.py \
+  benchmarks/results/2026-03-23-agdas-physics23-phase2.json
+```
+
+It emits:
+
+- `<input>.trace-graph.html`
+- `<input>.trace-graph.png`
+
+Scope note:
+
+- this renderer uses the saved deterministic walk only
+- edge width reports repeated edge use inside that walk
+- edge color reports transition family
+- it does **not** claim to reconstruct the full basin graph unless the source
+  artifact already contains that graph explicitly
+- keep this entrypoint as a lightweight explicit walk-graph utility; the
+  `branch-density` mode below is the more canonical basin/topology view for the
+  current rank-4 discussion
+
 To compare multiple FRACDASH runs on the same page and in one PNG:
 
 ```sh
@@ -259,6 +336,204 @@ That adapter currently renders the extracted `sample_*.cbor` rows as a small
 temporal perf-side trace and records the wider shard-family counts in the output
 metadata, so the FRACDASH waveform surface can start accepting zkperf-derived
 inputs before the full `perf -> DA51Trace -> SensibLaw` reducer is closed.
+
+The same normalized zkperf waveform JSON now has a first schema-aware compact
+codec:
+
+```sh
+python3 scripts/compact_zkperf_trace.py stats \
+  benchmarks/results/2026-03-25-zkperf-zkperf-da51-python.trace-waveform.json \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.json \
+  --roundtrip-output \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-roundtrip.json
+```
+
+This compact form stores only the raw sample fields needed to reconstruct the
+normalized waveform contract (`step`, event id, timestamp, period, pid, tid,
+cpu mode, cid`) plus the current heuristic semantic labels
+(`dashi_class`, `dashi_family`) and drops the derived matrix and annotation
+fields. The first checked-in DA51 sample now shrinks from `5875` bytes to
+`2139` bytes while round-tripping exactly.
+
+The important point is that this is not generic entropy coding. The current
+codec is a projection/reconstruction witness:
+
+- persistent payload: the compact raw sample rows
+- dropped payload: derived matrix and expanded annotations
+- reconstruction: deterministic rebuild of the normalized waveform contract
+
+In other words, the current gain comes from removing duplicated derived
+structure, not from a general-purpose byte-level coder. This is the first local
+MDL-style witness in the repo: keep the generating fields, recompute the
+projection when needed, and require exact round-trip before promotion.
+
+The next compression layer, if pursued, should sit above this one as motif
+compression over repeated row patterns rather than replacing the current codec.
+The most obvious first motif candidate is repeated
+`(event_idx, pid, tid, cpu_mode)` structure with timestamp/period parameters.
+
+That second layer now exists in the same entrypoint:
+
+```sh
+python3 scripts/compact_zkperf_trace.py stats-motif \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.json \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif.json \
+  --roundtrip-output \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif-roundtrip.json
+```
+
+On the checked-in DA51 sample, the motif layer finds two motifs and reduces the
+compact artifact from `1695` bytes to `1539` bytes (`~9.2%` smaller than the
+base compact form) while round-tripping exactly back to the compact rows. That
+is a useful but modest gain, so the next real question is not whether motif
+compression is valid, but which richer traces or motif grammars justify it.
+
+The next Dashi-facing experiment is to insert a semantic labeling pass before
+motif extraction. The compact row schema grows to include:
+
+- `dashi_class`
+- `dashi_family`
+
+The initial classifier is deliberately heuristic rather than theorem-backed. The
+goal is to test whether semantic equivalence classes yield materially better
+motif reuse than the current surface grammar. The measurement stack for that
+experiment is:
+
+- raw -> compact
+- raw -> compact -> surface motif
+- raw -> compact -> semantic motif
+
+That comparison now exists in the same entrypoint:
+
+```sh
+python3 scripts/compact_zkperf_trace.py stats-compare \
+  benchmarks/results/2026-03-25-zkperf-zkperf-da51-python.trace-waveform.json \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-compact.json \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-motif.json \
+  benchmarks/results/2026-03-27-zkperf-zkperf-da51-python.trace-semantic-motif.json
+```
+
+On the checked-in DA51 sample:
+
+- compact with semantic labels: `2139` bytes
+- surface motif layer: `1687` bytes, `2` motifs
+- semantic motif layer: `1658` bytes, `1` motif
+
+So the semantic path does beat the surface motif grammar, but only slightly on
+this tiny trace (`29` bytes better than the surface motif layer). That is
+enough to justify the direction, but not enough to claim that semantics has
+become the dominant compression source yet.
+
+The next target for tightening that result is not another tiny sample. It is
+the real upstream witness summary emitted by
+`../dashi_agda/perf_da51.py`:
+
+- `../dashi_agda/da51_shards/summary.json`
+
+That file is a better Dashi-facing compression target because it is directly
+generated from the merged Agda/perf witness lane and carries real module names
+such as `ActionMonotonicity.agda`, `Contraction.agda`, `DA51Trace.agda`,
+`FixedPoint.agda`, `JFixedPoint.agda`, `Moonshine.agda`, `MonsterSpec.agda`,
+and `Ultrametric.agda`. The next codec increment should therefore normalize and
+compress that summary artifact before expanding to broader perf families.
+
+That Dashi-summary normalizer now exists in a separate entrypoint:
+
+```sh
+python3 scripts/compact_dashi_perfhistory.py stats-compare \
+  ../dashi_agda/da51_shards/summary.json \
+  benchmarks/results/2026-03-27-dashi-perfhistory-normalized.json \
+  benchmarks/results/2026-03-27-dashi-perfhistory-compact.json \
+  benchmarks/results/2026-03-27-dashi-perfhistory-surface-motif.json \
+  benchmarks/results/2026-03-27-dashi-perfhistory-semantic-motif.json
+```
+
+On the current upstream summary:
+
+- raw summary: `9758` bytes
+- normalized analysis form: `23722` bytes across `41` rows
+- compact normalized form: `14245` bytes
+- surface motif form: `16586` bytes, `14` motifs
+- semantic motif form: `14156` bytes, `22` motifs
+
+So the Dashi-linked result is mixed:
+
+- good: semantic normalization is real and semantic motif beats surface motif by
+  `2430` bytes
+- bad: the raw upstream `summary.json` is already more compact than the
+  normalized/compact forms, so this is not yet a storage win over the source
+  artifact itself
+
+That means the `summary.json` path is useful for semantic analysis and Dashi
+label testing, but not yet the right compression target if the goal is raw
+artifact shrinkage.
+
+An additional graph-facing mode now exists on the same renderer entrypoint:
+
+```sh
+python3 scripts/render_trace_waveform.py \
+  --mode branch-density \
+  --rank4-dataset benchmarks/results/rank4-dataset-latest.json \
+  --phase2-artifact benchmarks/results/2026-03-23-agdas-physics23-phase2.json
+```
+
+This mode is separate from the existing deterministic-walk heatmap. It renders a
+spectrogram-style view of the canonical rank-4 quotient surface using:
+
+- a structural panel ordered by sector/stability over the projected raw-state axis
+- an optional walk-time panel over the same axis
+- graph branch activity as the default signal instead of plain occupancy density
+
+The branch-density x-axis is now explicitly versioned by projection:
+
+- `--x-axis raw-state`: detailed projected raw-state columns for debugging and hotspot inspection
+- `--x-axis basin`: canonical 10-basin columns with reachability/stability annotations
+- `--x-axis bucket`: experimental Gödel/fraction-band buckets for the "jumping between fractions" view
+
+Examples:
+
+```sh
+python3 scripts/render_trace_waveform.py \
+  --mode branch-density \
+  --x-axis basin \
+  --rank4-dataset benchmarks/results/rank4-dataset-latest.json \
+  --phase2-artifact benchmarks/results/2026-03-23-agdas-physics23-phase2.json
+
+python3 scripts/render_trace_waveform.py \
+  --mode branch-density \
+  --x-axis bucket \
+  --rank4-dataset benchmarks/results/rank4-dataset-latest.json \
+  --phase2-artifact benchmarks/results/2026-03-23-agdas-physics23-phase2.json
+```
+
+Current scope note:
+
+- it is aligned to the canonical 6-register rank-4 surface
+- it uses the rank-4 quotient machinery (`q(N)`) to project raw states into the
+  same 10-sector frame
+- `basin` is the preferred explanatory projection for the 10-basin / chain-height-4 discussion
+- `bucket` is exploratory and should be read as an encoded fraction-band view, not a canonical basin claim
+- it is experimental visualization support for the basin/topology discussion,
+  not a proof of the 10-basin or chain-height-4 claims
+- this is the preferred visualization path for the current basin/topology
+  discussion, while `render_trace_graph.py` remains available for simpler
+  explicit walk-graph inspection
+
+### Fractran Submodule State
+
+The local `fractran/` checkout is now in an interim repaired state:
+
+- `.gitmodules` declares `fractran` again
+- the local benchmark work is preserved on branch `frackdash-bench`
+- the preserved local benchmark commit is currently `6ccc7cc`
+
+Remaining blocker:
+
+- the canonical remote should be a maintained fork rather than only
+  `https://github.com/pimlu/fractran.git`
+- until that fork exists and the preserved branch is pushed there, the repo is
+  still carrying an interim submodule URL and a locally advanced gitlink
+
 That cross-carrier summary now exists at [`benchmarks/results/2026-03-23-cross-carrier-baseline-summary.md`](/home/c/Documents/code/FRACDASH/benchmarks/results/2026-03-23-cross-carrier-baseline-summary.md). Current read: `physics22` remains the clearer active 6-register baseline, `carrier8_physics1` remains mainly an observable branch, and `carrier8_physics2` should now be treated as the active parallel 8-register experiment track because it already exceeds the 6-register baseline on at least one geometry surrogate, even though it is not yet a direct replacement baseline.
 The first concrete successor trials are now in-repo as well. `physics23` clears the minimum 6-register successor condition by improving deterministic recurrent edges from `476 -> 503` while keeping the fixed-walk split, best-candidate signal, and geometry surrogates flat, but it does not yet improve terminal mass or direct re-entry beyond `physics22`, so it should still be read as a successor candidate rather than the new default baseline. On the 8-register side, `carrier8_physics3` does not materially move the `carrier8_physics2` baseline, `carrier8_physics4` showed that simple early hook placement was still not enough, and `carrier8_physics5` first made sampled `boundary_to_interior` nonzero but at a curvature cost. `carrier8_physics6` is now promoted as the provisional 8-register baseline: it keeps `boundary_to_interior = 6`, restores curvature (`~0.97`), accepts a small geodesic dip, and brings best-candidate strict decrease back near baseline. [`CARRIER8_PHYSICS5_TARGET_NOTE.md`](/home/c/Documents/code/FRACDASH/CARRIER8_PHYSICS5_TARGET_NOTE.md) remains the prior target; the next refinement should aim to recover the small geodesic/strict-decrease loss without giving back boundary recovery or curvature.
 
